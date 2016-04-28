@@ -4,8 +4,12 @@ var	server = require('http').createServer(app);
 var	io = require('socket.io').listen(server);
 var	mongoose = require('mongoose');
 var _=require("underscore");
+var bodyParser = require("body-parser");
 var notificationList = [];  //store all the notifications to be send
 var usersInf={} //Store all the users connected
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({extended:false}));
 
 server.listen(3000);
 
@@ -16,10 +20,16 @@ var User = require('./models/UserModel');
 //load notifications
 var notifications = Notification.find({});
 getNotifications();
-console.log("notifications: "+notifications);
 
 app.get('/', function(req, res){
 	res.sendfile(__dirname + '/index.html');
+});
+//webservice to post 
+app.post("/service",function(req,res){
+	var userService = req.param('user');
+	var txtService = req.param('txt');
+	saveNotification(userService, txtService);
+	res.json({'result':1})
 });
 
 io.sockets.on('connection', function(socket){
@@ -107,7 +117,6 @@ io.sockets.on('connection', function(socket){
 		}			
 	})
 	
-
 	socket.on('send message', function(data){
 		if(data != ""){
 			notifications = Notification.find({});
@@ -120,7 +129,7 @@ io.sockets.on('connection', function(socket){
 																 {safe: true, upsert: true});
 				notification.exec(function(err, docs){
 					if(err) throw err;
-					if (Notification) {}
+					if (docs) {}
 				});
 			}
 			
@@ -143,31 +152,39 @@ io.sockets.on('connection', function(socket){
 	});
 });
 
-function saveUserNotificiation(userName, notificationId, status){
-	var user;
-
-	if(status == 0){
-		user = User.findOneAndUpdate({"_id": userName},
-									 {$push:{subscriptions:notificationId}}, 
-										{"upsert":false});
-									 
-		user.exec(function(err, docs){
-			if(err) throw err;
-			if (User) {
-				console.log("User exists"+ User);
+function getNotifications(){
+	console.log('load notifications from db');
+	notifications.exec(function(err, docs){
+		if(err) throw err;
+		for(var i=0; i < docs.length; i++){	
+			for(var j=0; j < docs[i].msgs.length; j++){
+				notificationList.push(docs[i].msgs[j].txt);
 			}
-		});
-	}
+		}
+	});
 }
 
-function getNotifications(){
-		console.log('load notifications from db');
-		notifications.exec(function(err, docs){
+function saveNotification(author_p, message){
+
+	saveNotification(message, author_p)
+	function saveNotification(message, author_p){
+	
+		var notif = {txt:message, date:new Date(), author:author_p};
+
+		var notification = Notification.findOneAndUpdate({"_id": 1},
+														 {$push:{"msgs":notif}},
+														 {safe: true, upsert: true});
+		notification.exec(function(err, docs){
 			if(err) throw err;
-			for(var i=0; i < docs.length; i++){	
-				for(var j=0; j < docs[i].msgs.length; j++){
-					notificationList.push(docs[i].msgs[j].txt);
-				}
-			}
+			if (docs) {}
 		});
 	}
+	//Update notification list
+	notificationList.push(message);
+			
+	_.map( usersInf, function(user) {
+		if(usersInf[user.usrName].notify == 1){
+			usersInf[user.usrName].emit('new message', {msg: message, account:" tess"});
+		}
+	})
+}
