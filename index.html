@@ -1,0 +1,144 @@
+<html>
+<head>
+	<title>Notifications</title>
+	<style>
+		#notification{
+			/*width:200px;*/
+			height:300px;
+			overflow:auto;
+		}
+		#contentWrap{
+			display: none;
+		}
+		#notificationWrap{
+			border: 1px #000 solid;
+			font-size: 200%;
+		}
+	</style>
+	<script>
+		
+	</script>
+</head>
+<body>
+	<div id="accountWrap">
+		<p id="askNameBtn">Enter a username:</p>
+		<p id="accountError"></p>
+		<form id="setAccount">
+			<input size="35" id="accountName"></input>
+			<label style="display:none" id="subscriptionlbl" >
+				<input type="button" id="subscriptionCheck" value="Subscribe" ></input>
+			</label><br>
+			<input type="submit" value="Start Session" id="startSessionBtn" ></input>
+		</form>
+	</div>
+
+	<div id="contentWrap">
+		<form id="send-message">
+			<input size="35" id="message"></input>
+			<input type="submit"></input>
+		</form>
+		<div id="notificationWrap">
+			<div id="notification"></div>
+		</div>
+	</div>
+	
+	<script src="http://code.jquery.com/jquery-latest.min.js"></script>
+	<script src="/socket.io/socket.io.js"></script>
+	<script>
+		var $notificationTxtList = [''];
+		var temporal ="";
+		var i = 0;	
+				
+		setInterval("carrousel()", 3000);
+		
+		function carrousel(){
+		
+			if ($notificationTxtList.length >1)
+			if (temporal!=""){
+				document.getElementById("notification").innerHTML =temporal;
+				temporal = '';
+				
+			 }else{
+				 document.getElementById("notification").innerHTML = $notificationTxtList[i];
+				 max = $notificationTxtList.length;
+				 console.log(max);
+				 if ( i == max-1){ i=0; }
+				 i++;
+			 }
+		}
+		
+		jQuery(function($){
+			
+			var socket = io.connect();
+			var $accountForm = $('#setAccount');
+			var $accountError = $('#accountError');
+			var $accountBox = $('#accountName');
+			var $messageForm = $('#send-message');
+			var $messageBox = $('#message');
+			var $notification = $('#notification');
+			
+			
+			$('#subscriptionCheck').click(function(event){
+					var sendVal;
+					if($(this).val() == "Subscribe"){
+						$(this).val("Unsubscribe");
+						sendVal = 1;
+					}else{
+						$(this).val("Subscribe");
+						sendVal = 0;
+						$notificationTxtList = [' ']
+					}
+					socket.emit('subscription', sendVal);
+				});
+				
+			socket.on('userNotifications', function(data){
+				console.log(data.notify);
+				var msg;
+				if (data.notify === 0){
+					msg = "Subscribe";
+				}else{
+					msg = "Unsubscribe";
+				}
+				$('#subscriptionCheck').val(msg);
+			});
+		
+			
+			$accountForm.submit(function(e){
+				e.preventDefault();
+				socket.emit('new user', $accountBox.val(), function(data){
+					if(data !== false){
+						console.log(data);
+						//$('#accountWrap').hide();
+						$('#accountName').hide();
+						$('#subscriptionlbl').show();
+						$('#askNameBtn').hide();
+						$('#contentWrap').show();
+						$('#startSessionBtn').hide();
+						if( data =='admin'){
+							$('#send-message').show();
+							$('#notificationWrap').hide();
+							$('#subscriptionCheck').hide();
+						}else{
+							$('#send-message').hide();
+						}
+					} else{
+						$accountError.html('That username is already taken! Try again.');
+					}
+				});
+				$accountBox.val('');
+			});
+
+			$messageForm.submit(function(e){
+				e.preventDefault();
+				socket.emit('send message', $messageBox.val());
+			});
+			
+			socket.on('new message', function(data){
+				console.log(data);
+				$notificationTxtList.push(data.msg);
+				temporal = data.msg;
+			});
+		});
+	</script>
+</body>
+</html>
